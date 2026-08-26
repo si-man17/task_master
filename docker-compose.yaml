@@ -1,79 +1,46 @@
-version: "4.8"
+version: 1.0
 
 networks:
   app_network:
-    name: app_network
     driver: bridge
+  
 
 services:
-  # ==========================================
-  # 1. RoadRunner + PHP
-  # ==========================================
-  app:
-    container_name: roadrunner_app
-    image: ghcr.io/roadrunner-server/roadrunner:2024.3.0
-    ports:
-      - "8000:8080"
-    volumes:
-      - ./:/var/www:rw
-      - ./.rr.yaml:/etc/rr.yaml:ro
-    environment:
-      - DB_HOST=mysql8.0
-      - DB_PORT=3306
-      - DB_NAME=${MYSQL_DATABASE}
-      - DB_USER=${MYSQL_USER}
-      - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
-    networks:
-      - app_network
-    depends_on:
-      mysql8.0:
-        condition: service_healthy
-    restart: unless-stopped
 
-  # ==========================================
-  # 2. MySQL 8.0
-  # ==========================================
-  mysql8.0:
-    container_name: mysql8.0
+  app:       
+    build:
+      context: .            ← корень проекта как контекст сборки
+      dockerfile: dockerfiles/app.Dockerfile
+    ports: 8000:8080
+    volumes: ./ → /var/www             (код виден контейнеру, правки без пересборки)
+    environment: DB_HOST / DB_NAME / DB_USER / DB_PASSWORD / DB_ROOT_PASSWORD
+    depends_on: mysql
+    networks, restart: unless-stopped
+
+  mysql:                  
     image: mysql:8.0
-    ports:
-      - "3316:3306"
-    environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    ports: 3316 → 3306
+    environment: DB_HOST / DB_NAME / DB_USER / DB_PASSWORD / DB_ROOT_PASSWORD
     volumes:
-      - db_data:/var/lib/mysql
-      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    networks:
-      - app_network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - именованный volume → /var/lib/mysql          (данные переживают down)
+      - ./scripts/init.sql → /docker-entrypoint-initdb.d/init.sql:ro
+        ← сработает ТОЛЬКО на пустом volume
+    healthcheck: mysqladmin ping   ← ради него app и умеет ждать
+    networks, restart
 
-  # ==========================================
-  # 3. phpMyAdmin (опционально)
-  # ==========================================
   phpmyadmin:
-    container_name: phpmyadmin
     image: phpmyadmin:latest
-    ports:
-      - "1500:80"
-    environment:
-      - PMA_HOST=mysql8.0
-      - PMA_PORT=3306
-      - PMA_ARBITRARY=1
-      - UPLOAD_LIMIT=50M
-    networks:
-      - app_network
-    depends_on:
-      - mysql8.0
-    restart: unless-stopped
+    ports: 1500 → 80
+    environment: PMA_HOST = имя сервиса mysql
+    depends_on: mysql
+    networks
+
+  composer:                 ← ИНСТРУМЕНТ, не демон
+    build: dockerfiles/composer.Dockerfile
+    volumes: ./ → /var/www  ← без него vendor/ исчезнет вместе с контейнером
+    profiles: [tools]       ← чтобы НЕ поднимался при обычном `up`
+    networks — не обязателен (в сеть ему не надо)
+    restart — НЕ ставить
 
 volumes:
-  db_data:
-    name: roadrunner_db_data
+  db_data:                  ← именованный том для данных MySQL
