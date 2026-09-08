@@ -1,0 +1,67 @@
+version: "3"
+
+# Настройки запуска PHP-воркеров
+server:
+  command: "php worker.php" # Команда для запуска вашего воркера
+  relay: "pipes"                 # Способ связи: pipes (пайпы) или tcp
+  relay_timeout: 20s                   # Максимальное время на инициализацию воркера
+
+# Настройки HTTP-сервера (плагин http)
+http:
+  address: "0.0.0.0:8080"        # Хост и порт, который слушает сервер
+  max_request_size: 256          # Максимальный размер запроса в МБ
+  middleware: ["header", "static", "gzip"] # Подключаемые посредники
+  uploads:
+    dir: "/tmp"
+    forbid: [".php", ".exe", ".bat"]
+    allow: [".jpg", ".png", ".pdf"]
+  headers:
+  # Заголовки, которые добавятся к ОТВЕТУ сервера
+    response:
+      X-Powered-By: "RoadRunner"
+      Cache-Control: "no-cache, no-store, must-revalidate"
+    # Если вам нужны специфические заголовки CORS, они выносятся в отдельный блок
+    cors:
+      allowed_methods: "GET,POST,PUT,DELETE,OPTIONS"
+
+  # Настройки раздачи статики без участия PHP
+  static:
+    dir: "public"
+    forbid: [".php", ".htaccess"]
+
+  # Настройки пула процессов для обработки HTTP
+  pool:
+    num_workers: 4               # Сколько процессов PHP запустить изначально
+    max_jobs: 500                # Сколько запросов обработает воркер перед перезапуском
+    allocate_timeout: 60s        # Время ожидания свободного воркера
+    destroy_timeout: 60s         # Время на мягкое завершение воркера
+
+    # Контроль за утечками памяти и зависаниями воркеров
+    supervisor:
+      watch_tick: 1s
+      max_worker_memory: 128     # Лимит памяти на один воркер в МБ
+      exec_ttl: 60s               # Максимальное время жизни воркера
+      idle_ttl: 60s              # Время жизни простаивающего воркера
+
+# Настройки логирования
+logs:
+  mode: "development"            # Режим: development (красивый вывод) или production (строгий)
+  level: "debug"                 # Уровень логов: panic, error, warn, info, debug
+  encoding: "console"            # Формат: console или json
+
+# Удаленное управление сервером (RPC)
+# rpc:
+#   listen: "tcp://127.0.0.1:6001" # Адрес для CLI-команд (например, для rr reset)
+
+# # Настройки очередей / задач (опционально)
+# jobs:
+#   consume: ["default"]           # Какие пайплайны слушать данному серверу
+#   pipelines:
+#     default:
+#       driver: memory             # Драйвер очереди: memory, amqp, sqs, redis, kafka
+
+# # Настройки gRPC-сервера (опционально)
+# grpc:
+#   listen: "tcp://0.0.0.0:9001"
+#   proto:
+#     - "proto/service.proto"

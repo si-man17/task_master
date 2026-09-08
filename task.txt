@@ -1,0 +1,355 @@
+Отличная задача! То, что вы описываете, — это классический путь эволюции проекта от "монолита-прототипа" до "микросервисной распределенной системы".
+
+Главное правило такого пути: Никогда не переписывайте всё с нуля. Используйте технику "Strangler Fig Pattern" (паттерн "фикус-убийца") — постепенно вырезайте куски старого монолита и заменяйте их новыми микросервисами.
+
+Вот пошаговый план (Roadmap) от простого к сложному с привязкой к вашему стеку.
+
+Этап 0. Подготовка (Git и Docker)
+Перед тем как написать первую строку кода, настройте инфраструктуру.
+
+Git-flow: Создайте репозиторий. Сразу заведите ветки: main (prod), develop (dev), и feature/*.
+
+Docker Compose (база): Напишите docker-compose.yml, который поднимает только Nginx (раздающий статику) и MySQL.
+
+Makefile или Shell scripts: Напишите пару команд (make up, make migrate), чтобы не дергать Docker вручную.
+
+Этап 1. MVP (Прототип) — «Быстрый старт»
+Цель: Заставить работать CRUD (Создать/Читать/Обновить/Удалить) задачи в канбане.
+
+Стек: Чистый PHP (без фреймворка) + JavaScript (ванильный, fetch) + MySQL.
+
+Шаги:
+
+Backend (API): Создайте папку /public. Положите туда index.php. Этот файл — единая точка входа (роутер). Пишите простые роуты: GET /tasks, POST /task, PATCH /task/{id}.
+
+Архитектура: Используйте простейший MVC без роутера-библиотеки. Подключение к БД — через PDO в конструкторе.
+
+Frontend: Один index.html, в котором сверстана доска на 3 колонки (To Do, In Progress, Done). Используйте Drag and Drop API (нативное, без библиотек). При перетаскивании отправляйте PATCH-запрос на сервер.
+
+Git: Сделайте коммит v0.1 - MVP CRUD.
+
+Этап 2. Усложнение бизнес-логики (Refactoring)
+Цель: Добавить пользователей и авторизацию.
+
+Шаги:
+
+В MySQL создайте таблицу users. Сделайте простую авторизацию по токену (Bearer token) без JWT (просто UUID, который хранится в БД).
+
+Добавьте мидлвейры (Middlewares) в ваш роутер на PHP. Скопируйте идею Laravel — обработка запроса проходит через цепочку функций перед выполнением контроллера.
+
+Добавьте WebSockets (Socket.io или Ratchet) для того, чтобы если один пользователь передвинул задачу, у второго она обновилась без перезагрузки страницы. Пока просто пушите события в Redis и читаете их через WS-сервер.
+
+Git: Ветка feature/auth, затем feature/websockets. Мерж в develop.
+
+Этап 3. Инфраструктура и Асинхронность
+Цель: Научить проект работать с тяжелыми операциями в фоне.
+
+Стек: Добавляем RabbitMQ / Kafka и React (пока только для одной страницы).
+
+Шаги:
+
+Очереди (RabbitMQ): Добавьте в docker-compose сервис RabbitMQ. Создайте задачу: "При создании задачи отправлять уведомление на почту". Но не отправлять сразу, а класть задание в очередь. Пишите простого консюмера (PHP скрипт, запущенный в отдельном контейнере php-worker), который слушает очередь и шлет письма.
+
+Nginx: Настройте проксирование для сокетов (если используете отдельный порт) и статики. Также настройте буферизацию ответов от API.
+
+Миграция фронта (React): Создайте отдельную папку /frontend-react. Напишите на React одну страницу (доску). Настройте Nginx так, чтобы он отдавал старый HTML по пути /old, а React-сборку — по корню /. Это начало паттерна Strangler.
+
+Git: Внедрите Git Hooks (pre-commit) для запуска линтера (PHP CS Fixer) и простых тестов.
+
+Этап 4. Переход на Laravel (Модернизация бэка)
+Цель: Убрать велосипедный PHP-код, заменив его на промышленный фреймворк.
+
+Стек: Laravel (API-only) + React (полноценно) + Kafka (заменяет RabbitMQ для стриминга).
+
+Шаги:
+
+Новый сервис: Поставьте Laravel в отдельную папку /laravel-api. Он будет подниматься на отдельном порту (внутри docker).
+
+Nginx (Reverse Proxy): Настройте Nginx так: все запросы, начинающиеся с /api/v2/, проксируются в Laravel. А старые запросы (/api/v1/) пока идут в старый PHP-монолит. Теперь старый и новый код живут параллельно.
+
+Модели и Eloquent: Перепишите логику CRUD на Laravel. Используйте Queues в Laravel (они уже используют базу или Redis) для отправки писем.
+
+Kafka: Добавьте Kafka в compose. В Laravel сделайте Event Listener: когда задача создается, событие публикуется в Kafka. Отдельный микросервис-консьюмер (на PHP или Python) читает это и, например, индексирует задачу для поиска (Elasticsearch в будущем).
+
+Этап 5. Полноценная модернизация и «Вырезание» старого кода
+Цель: Полностью отказаться от старого монолита.
+
+Шаги:
+
+API Gateway: Теперь у вас не один Nginx, а Nginx + Laravel API Gateway. Перенаправляйте все запросы через Laravel.
+
+Вынос Auth: Сделайте отдельный микросервис авторизации (на том же Laravel или Lumen). Все проверки токенов теперь ходят туда через внутренний HTTP-запрос (или gRPC).
+
+Read Models: Перестаньте дергать MySQL для сложных отчетов. Настройте CDC (Change Data Capture) с помощью Debezium, который читает бинарные логи MySQL и кидает изменения в Kafka. Оттуда их забирает сервис статистики и обновляет Redis/Elasticsearch.
+
+Git (CI/CD): Настройте GitHub Actions или GitLab CI. При пуше в main автоматически запускаются тесты (PHPUnit + Jest), собираются Docker-образы и деплоятся на сервер.
+
+Итоговый чек-лист "Технологии и когда их добавлять":
+Технология	Когда добавлять	Зачем
+MySQL + Nginx	Шаг 0	База и веб-сервер.
+Docker	Шаг 0	Для воспроизводимости окружения.
+Git (с ветками)	Шаг 0	Чтобы не бояться экспериментировать.
+Vanilla JS + Fetch	Шаг 1	Быстрый прототип.
+PHP + PDO (монолит)	Шаг 1	Понять суть работы без абстракций.
+WebSockets (Ratchet)	Шаг 2	Реализовать real-time для коллег.
+RabbitMQ	Шаг 3	Первая асинхронная задача (письма).
+React	Шаг 3	Улучшить UX и подготовить SPA.
+Laravel	Шаг 4	Стандартизировать код, получить очередь и события "из коробки".
+Kafka	Шаг 4	Заменить Rabbit (если нужна строгая последовательность событий и хранение истории).
+API Gateway	Шаг 5	Для маршрутизации между микросервисами.
+Самый важный совет по Git на этом пути:
+Не делайте одну большую ветку feature/big_refactoring.
+Действуйте так:
+
+Каждый новый микросервис или технология — это отдельная папка в корне проекта (монорепозиторий).
+
+На каждый новый сервис заводите отдельный Dockerfile.
+
+В docker-compose.yml просто добавляете новый контейнер.
+
+Ваш git log должен выглядеть так:
+
+feat: add RabbitMQ consumer for emails
+
+feat: add Laravel V2 API endpoint
+
+refactor: nginx proxy switched 30% traffic to V2 (канареечный деплой)
+
+chore: remove old public/index.php (monolith is dead)
+
+Удачи! Начинайте с Шага 0 и Шага 1. Главное в таком проекте — довести до рабочего состояния именно первый прототип, чтобы была мотивация его улучшать. Если на каком-то из этапов (особенно с Kafka на Шаге 4) возникнут сложности — это нормально, это самый сложный, но самый крутой этап.
+
+создал пустой репозиторий, хочу подключить его по ssh и локально у себя создать новые ветки. потом все запушить
+Отлично! Давайте пошагово настроим ваш репозиторий, подключимся по SSH и создадим правильную структуру веток с самого начала.
+
+Шаг 1. Клонируем пустой репозиторий по SSH
+bash
+# Клонируем (замените URL на ваш)
+git clone git@github.com:ваш-username/название-репозитория.git
+
+# Или если репозиторий на GitLab/Bitbucket:
+git clone git@gitlab.com:ваш-username/название-репозитория.git
+
+# Переходим в папку проекта
+cd название-репозитория
+Если вы не настраивали SSH-ключи:
+
+bash
+# Сгенерировать ключ
+ssh-keygen -t ed25519 -C "ваша-почта@example.com"
+
+# Добавить ключ в ssh-agent
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_ed25519
+
+# Скопировать публичный ключ и добавить его в GitHub/GitLab (Settings -> SSH keys)
+cat ~/.ssh/id_ed25519.pub
+Шаг 2. Создаем основную структуру веток
+Сейчас вы находитесь в ветке main (или master). Создадим все нужные ветки локально:
+
+bash
+# Убедимся, что мы на main
+git checkout main
+
+# Создаем ветку develop (от main)
+git checkout -b develop
+
+# Создаем ветку для первой фичи (например, настройка Docker)
+git checkout -b feature/docker-setup
+
+# Возвращаемся в develop
+git checkout develop
+
+# Создаем еще одну ветку для примера
+git checkout -b feature/php-base
+Теперь у вас локально есть ветки:
+
+main — продакшен
+
+develop — разработка (основная рабочая ветка)
+
+feature/docker-setup — для настройки Docker
+
+feature/php-base — для базового PHP-кода
+
+Шаг 3. Пушим все ветки в удаленный репозиторий
+bash
+# Пушим main (она уже отслеживается)
+git push origin main
+
+# Пушим develop с установкой upstream (привязка к удаленной ветке)
+git push -u origin develop
+
+# Пушим feature-ветки
+git push -u origin feature/docker-setup
+git push -u origin feature/php-base
+Проверяем результат:
+
+bash
+# Смотрим все ветки (локальные и удаленные)
+git branch -a
+Вы должны увидеть:
+
+text
+* develop
+  feature/docker-setup
+  feature/php-base
+  main
+  remotes/origin/develop
+  remotes/origin/feature/docker-setup
+  remotes/origin/feature/php-base
+  remotes/origin/main
+Шаг 4. Настраиваем защиту веток (опционально, но рекомендуется)
+Зайдите в настройки репозитория на GitHub/GitLab и настройте Branch Protection Rules:
+
+Для main:
+
+Require pull request reviews
+
+Require status checks (когда добавите CI)
+
+Require linear history (No merge commits)
+
+Для develop:
+
+Require pull request reviews (но можно менее строго)
+
+Require status checks
+
+Шаг 5. Создаем первый коммит (структура проекта)
+Выберите ветку, в которой будете работать (например, feature/docker-setup):
+
+bash
+git checkout feature/docker-setup
+Создайте базовую структуру проекта:
+
+bash
+# Создаем папки
+mkdir -p public src config docker/nginx docker/mysql scripts
+
+# Создаем базовые файлы
+echo "# Kanban Task Tracker" > README.md
+echo "vendor/" > .gitignore
+echo ".env" >> .gitignore
+echo ".idea/" >> .gitignore
+
+# Docker-compose заглушка
+cat > docker-compose.yml << 'EOF'
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./public:/var/www/html
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: kanban
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./docker/mysql:/var/lib/mysql
+    restart: unless-stopped
+EOF
+
+# PHP-заглушка для проверки
+cat > public/index.php << 'EOF'
+<?php
+phpinfo();
+EOF
+Теперь закоммитим и запушим:
+
+bash
+# Добавляем все файлы
+git add .
+
+# Коммит с осмысленным сообщением
+git commit -m "feat: initial project structure with Docker Compose"
+
+# Пушим в удаленную ветку
+git push origin feature/docker-setup
+Шаг 6. Работаем по Git Flow (пример)
+Теперь у вас есть рабочий процесс:
+
+1. Создаете новую фичу от develop:
+bash
+git checkout develop
+git pull origin develop  # обновляем develop
+git checkout -b feature/new-functionality
+2. Работаете, коммитите:
+bash
+git add .
+git commit -m "feat: add task CRUD operations"
+git push origin feature/new-functionality
+3. Создаете Pull Request в develop (через интерфейс GitHub/GitLab)
+4. После мержа удаляете локальную ветку:
+bash
+git checkout develop
+git pull origin develop
+git branch -d feature/new-functionality
+Шаг 7. Настройка .gitconfig (для удобства)
+Добавьте алиасы для ускорения работы:
+
+bash
+git config --global alias.co checkout
+git config --global alias.br branch
+git config --global alias.ci commit
+git config --global alias.st status
+git config --global alias.unstage 'reset HEAD --'
+git config --global alias.last 'log -1 HEAD'
+Теперь можно писать git co develop вместо git checkout develop.
+
+Быстрый чек-лист команд на каждый день:
+Действие	Команда
+Начать новую фичу	git checkout develop && git pull && git checkout -b feature/название
+Проверить статус	git status
+Добавить все изменения	git add .
+Закоммитить	git commit -m "описание"
+Отправить на сервер	git push origin feature/название
+Обновить develop	git checkout develop && git pull
+Удалить локальную ветку	git branch -d feature/название
+Важно: .gitignore для PHP-проекта
+Обязательно добавьте это в .gitignore с самого начала:
+
+gitignore
+# Зависимости
+/vendor/
+/node_modules/
+
+# Окружение
+.env
+.env.*
+!.env.example
+
+# Логи
+*.log
+/storage/logs/
+
+# Кеш
+/cache/
+/.phpunit.cache
+
+# IDE
+/.idea/
+/.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+/docker/mysql/
+/docker/redis/
+
+# Сборки
+/dist/
+/build/
+/public/build/
+Теперь ваш репозиторий готов к развитию! Можете сразу начать с feature/docker-setup и постепенно добавлять код по плану из прошлого ответа. Удачи! 🚀
