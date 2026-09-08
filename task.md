@@ -15,11 +15,11 @@
 - [x] docker-compose.yaml: RoadRunner + MySQL 8.0 + phpMyAdmin
 - [x] .rr.yaml: static, CORS, pool воркеров
 - [x] composer.json: roadrunner, psr7, phpdotenv, phpunit
-- [ ] Заполнить .gitignore (vendor/, .env, node_modules/, .idea/ и т.д.)
-- [ ] scripts/init.sql — таблица tasks (id, title, description, status, position, created_at)
-- [ ] worker.php — минимальный цикл RoadRunner, ответ {"status":"ok"}
-- [ ] composer install через dockerfiles/composer.Dockerfile
-- [ ] Проверка: docker compose up → :8000 отвечает, phpMyAdmin (:1500) видит БД
+- [~] Заполнить .gitignore (vendor/, .env, node_modules/, .idea/ и т.д.)
+- [~] scripts/init.sql — таблица tasks (id, title, description, status, position, created_at)
+- [~] worker.php — минимальный цикл RoadRunner, ответ {"status":"ok"}
+- [~] composer install через dockerfiles/composer.Dockerfile
+- [~] Проверка: docker compose up → :8000 отвечает, phpMyAdmin (:1500) видит БД
 - [ ] Коммит `feat: project infrastructure (roadrunner + mysql)` в feature/docker-setup, PR → develop
 
 ## Этап 1. MVP — CRUD канбана (чистый PHP + vanilla JS)
@@ -93,3 +93,5 @@
 | 2026-08-21 | Репозиторий, ветки main/develop |
 | 2026-08-24 | docker-compose, .rr.yaml, composer.json (не закоммичено) |
 | 2026-08-25 | CLAUDE.md, task.md, план утверждён. Фокус — добить Этап 0 |
+| 2026-09-07 | Ревью .rr.yaml (uploads, headers, relay_timeout), composer.Dockerfile, composer.json (config.platform, ext-*), init.sql, compose (env MYSQL_*, кэш composer). .env снят с отслеживания git (был закоммичен и запушен в origin/develop) |
+| 2026-09-08 | Диагностика перезапусков app: нет vendor, путь autoload, spiral/roadrunner — метапакет без кода → заменён на spiral/roadrunner-http. RR поднят до 2025.1 (CVE-2025-22871). worker.php написан, curl :8000 → {"status":"ok"}, таблица tasks в БД. Осталось: коммит в feature/docker-setup, PR |

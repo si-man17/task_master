@@ -11,35 +11,37 @@
 - SPA + API. HTTP-сервер — **RoadRunner** (вместо классического nginx+php-fpm; nginx появится на этапе 3 как reverse proxy).
 - PHP >= 8.2, PSR-7 (nyholm/psr7), автозагрузка PSR-4: `App\` → `src/`.
 - MySQL 8.0 в Docker (порт хоста 3316), phpMyAdmin на :1500, приложение на :8000 (внутри 8080).
-- Точка входа PHP-воркера: `worker.php` (пока пустой). Статика раздаётся RoadRunner из `public/`.
+- Точка входа PHP-воркера: `worker.php` — цикл PSR7Worker (spiral/roadrunner-http), отвечает `{"status":"ok"}`. Статика раздаётся RoadRunner из `public/`.
+- Пакет `spiral/roadrunner` — метапакет без PHP-кода, классы Worker/PSR7Worker берутся из `spiral/roadrunner-http`. Бинарник rr в образе: `ghcr.io/roadrunner-server/roadrunner:2025.1` (multi-stage COPY в app.Dockerfile).
+- `.env` ключи `MYSQL_*` (их ждёт образ mysql); compose прокидывает их в app как `DB_*`.
 
 ## Структура
 ```
 docker-compose.yaml   # app (RoadRunner), mysql8.0, phpmyadmin
-.rr.yaml              # конфиг RoadRunner: static, CORS, pool 4 воркера
-composer.json         # roadrunner, psr7, phpdotenv, phpunit
-dockerfiles/          # composer.Dockerfile
+.rr.yaml              # конфиг RoadRunner: static, gzip, pool 4 воркера (headers/CORS — на этапе 3)
+composer.json         # roadrunner-http, psr7, phpdotenv, phpunit; config.platform = php 8.2
+dockerfiles/          # app.Dockerfile (php:8.2-cli + rr), composer.Dockerfile (profile tools)
 public/               # фронтенд (index.html + js) — пока пусто
 src/                  # PHP-код (App\) — пока пусто
-scripts/              # init.sql для MySQL — пока пусто (compose его ждёт!)
-worker.php            # цикл RoadRunner-воркера — пока пустой
+scripts/              # init.sql — таблица tasks
+worker.php            # цикл RoadRunner-воркера — готов
 ```
 
 ## Git
 - Ветки: `main` (prod), `develop` (рабочая), `feature/*` — от develop, мерж через PR.
 - Коммиты в стиле conventional commits: `feat:`, `fix:`, `refactor:`, `chore:`.
-- Сейчас: 1 коммит "Initial commit", все файлы инфраструктуры ещё НЕ закоммичены.
+- Сейчас: 3 коммита в develop, вся инфраструктура Этапа 0 в рабочей копии, НЕ закоммичена. `.env` был закоммичен и запушен в origin/develop — снят с отслеживания (`git rm --cached`), история не переписана.
 
 ## Roadmap (полный план — не переписывать с нуля, паттерн Strangler Fig)
 
 ### Этап 0. Инфраструктура — В ПРОЦЕССЕ
-Сделано: docker-compose (RoadRunner+MySQL+phpMyAdmin), .rr.yaml, composer.json, ветки main/develop.
+Сделано: всё, кроме коммита. `docker compose up` работает, :8000 отвечает `{"status":"ok"}`, таблица tasks создаётся из init.sql.
 Осталось:
-- [ ] Заполнить `.gitignore` (vendor/, .env, node_modules/, .idea/ и т.д.)
-- [ ] Написать `scripts/init.sql` (таблица tasks: id, title, description, status, position, created_at)
-- [ ] Написать `worker.php` — минимальный цикл RoadRunner (PSR-7 Worker), отвечающий "hello"
-- [ ] `composer install` через dockerfiles/composer.Dockerfile
-- [ ] Убедиться: `docker compose up` → :8000 отвечает, phpMyAdmin видит БД
+- [x] Заполнить `.gitignore` (vendor/, .env, node_modules/, .idea/ и т.д.)
+- [x] Написать `scripts/init.sql` (таблица tasks: id, title, description, status, position, created_at)
+- [x] Написать `worker.php` — минимальный цикл RoadRunner (PSR-7 Worker), отвечающий "hello"
+- [x] `composer install` через dockerfiles/composer.Dockerfile
+- [x] Убедиться: `docker compose up` → :8000 отвечает, phpMyAdmin видит БД
 - [ ] Коммит `feat: project infrastructure (roadrunner + mysql)` в `feature/docker-setup`, PR в develop
 Чекпоинт: контейнеры поднимаются, воркер отвечает на HTTP.
 
@@ -115,3 +117,4 @@ worker.php            # цикл RoadRunner-воркера — пока пуст
 - 2026-08-21: репозиторий создан, ветки main/develop
 - 2026-08-24: docker-compose, .rr.yaml, composer.json (не закоммичено)
 - 2026-08-25: этот CLAUDE.md создан; текущий фокус — добить Этап 0
+- 2026-09-08: Этап 0 работает end-to-end (RR 2025.1, worker.php, init.sql). Осталось: ветка feature/docker-setup, коммит, PR в develop. Полезный приём отладки: `docker compose run --rm --no-deps app php worker.php` показывает ошибку старта воркера без шума RR.

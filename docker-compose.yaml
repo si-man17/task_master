@@ -1,46 +1,74 @@
-version: 1.0
+services:
+
+  app:
+    build:
+      context: .                              # откуда берутся файлы для COPY
+      dockerfile: dockerfiles/app.Dockerfile
+    ports:
+      - "8000:8080"                           # хост:контейнер
+    volumes:
+      - ./:/var/www                           # код монтируется, правки без пересборки
+    env_file:
+      - .env                                  # все переменные из .env попадут в контейнер
+    environment:
+      DB_HOST: mysql                          # имя сервиса = DNS-имя в сети compose
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE}              # подстановка из .env на уровне compose
+      DB_USER: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+    depends_on:
+      mysql:
+        condition: service_healthy            # ждать не просто старта, а healthcheck
+    networks:
+      - app_network
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3316:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql                # именованный том, данные живут после down
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app_network
+    restart: unless-stopped
+
+  phpmyadmin:
+    image: phpmyadmin:5.2
+    ports:
+      - "1500:80"
+    environment:
+      PMA_HOST: mysql
+    depends_on:
+      - mysql
+    networks:
+      - app_network
+
+  composer:
+    build:
+      context: .
+      dockerfile: dockerfiles/composer.Dockerfile
+    volumes:
+      - ./:/var/www
+      - composer_cache:/tmp/composer-cache   # кэш пакетов между запусками
+    profiles:
+      - tools                                 # не поднимается при обычном up
 
 networks:
   app_network:
     driver: bridge
-  
-
-services:
-
-  app:       
-    build:
-      context: .            ← корень проекта как контекст сборки
-      dockerfile: dockerfiles/app.Dockerfile
-    ports: 8000:8080
-    volumes: ./ → /var/www             (код виден контейнеру, правки без пересборки)
-    environment: DB_HOST / DB_NAME / DB_USER / DB_PASSWORD / DB_ROOT_PASSWORD
-    depends_on: mysql
-    networks, restart: unless-stopped
-
-  mysql:                  
-    image: mysql:8.0
-    ports: 3316 → 3306
-    environment: DB_HOST / DB_NAME / DB_USER / DB_PASSWORD / DB_ROOT_PASSWORD
-    volumes:
-      - именованный volume → /var/lib/mysql          (данные переживают down)
-      - ./scripts/init.sql → /docker-entrypoint-initdb.d/init.sql:ro
-        ← сработает ТОЛЬКО на пустом volume
-    healthcheck: mysqladmin ping   ← ради него app и умеет ждать
-    networks, restart
-
-  phpmyadmin:
-    image: phpmyadmin:latest
-    ports: 1500 → 80
-    environment: PMA_HOST = имя сервиса mysql
-    depends_on: mysql
-    networks
-
-  composer:                 ← ИНСТРУМЕНТ, не демон
-    build: dockerfiles/composer.Dockerfile
-    volumes: ./ → /var/www  ← без него vendor/ исчезнет вместе с контейнером
-    profiles: [tools]       ← чтобы НЕ поднимался при обычном `up`
-    networks — не обязателен (в сеть ему не надо)
-    restart — НЕ ставить
 
 volumes:
-  db_data:                  ← именованный том для данных MySQL
+  db_data:
+  composer_cache:

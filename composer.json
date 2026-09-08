@@ -1,12 +1,13 @@
 {
-    "name": "your-name/kanban-tracker",
+    "name": "kryzhnyy/kanban-tracker",
     "description": "Kanban task tracker with RoadRunner",
     "type": "project",
     "require": {
         "php": ">=8.2",
-        "spiral/roadrunner": "^2024",
-        "spiral/roadrunner-cli": "^2.0",
+        "ext-pdo_mysql": "*",
+        "ext-sockets": "*",
         "nyholm/psr7": "^1.8",
+        "spiral/roadrunner-http": "^3.5",
         "vlucas/phpdotenv": "^5.6"
     },
     "require-dev": {
@@ -21,5 +22,17 @@
         "psr-4": {
             "Tests\\": "tests/"
         }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "config": {
+        "platform": {
+            "php": "8.2.0",
+            "ext-sockets": "8.2.0",
+            "ext-pdo_mysql": "8.2.0"
+        },
+        "sort-packages": true,
+        "optimize-autoloader": true
     }
 }
