@@ -10,7 +10,7 @@ server:
 http:
   address: "0.0.0.0:8080"        # Хост и порт, который слушает сервер
   max_request_size: 256          # Максимальный размер запроса в МБ
-  middleware: ["header", "static", "gzip"] # Подключаемые посредники
+  middleware: ["headers", "static", "gzip"] # Подключаемые посредники
   uploads:
     dir: "/tmp"
     forbid: [".php", ".exe", ".bat"]

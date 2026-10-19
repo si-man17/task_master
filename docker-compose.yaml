@@ -7,22 +7,21 @@ services:
     ports:
       - "8000:8080"                           # хост:контейнер
     volumes:
-      - ./:/var/www                           # код монтируется, правки без пересборки
-    env_file:
-      - .env                                  # все переменные из .env попадут в контейнер
+      - ./:/var/www
     environment:
-      DB_HOST: mysql                          # имя сервиса = DNS-имя в сети compose
-      DB_PORT: 3306
+      DB_HOST: ${MYSQL_HOST}                          # имя сервиса = DNS-имя в сети compose
+      DB_PORT: ${MYSQL_PORT}
       DB_NAME: ${MYSQL_DATABASE}              # подстановка из .env на уровне compose
       DB_USER: ${MYSQL_USER}
       DB_PASSWORD: ${MYSQL_PASSWORD}
+      APP_ENV: ${APP_ENV}
+      APP_DEBUG: ${APP_DEBUG}
     depends_on:
       mysql:
         condition: service_healthy            # ждать не просто старта, а healthcheck
     networks:
       - app_network
     restart: unless-stopped
-
   mysql:
     image: mysql:8.0
     ports:
@@ -49,7 +48,7 @@ services:
     ports:
       - "1500:80"
     environment:
-      PMA_HOST: mysql
+      PMA_HOST: ${MYSQL_HOST}
     depends_on:
       - mysql
     networks:
