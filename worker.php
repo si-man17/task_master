@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Spiral\RoadRunner\Http\PSR7Worker;
 use Spiral\RoadRunner\Worker;
+use App\Core\Database;
 
 // stdout занят протоколом обмена с RoadRunner, любой вывод — только в stderr
 ini_set('display_errors', 'stderr');
@@ -16,11 +17,14 @@ $psr_factory = new Psr17Factory();
 $worker      = Worker::create();
 $psr7_worker = new PSR7Worker($worker, $psr_factory, $psr_factory, $psr_factory);
 
+$db = Database::fromEnv();
+
 // waitRequest() вернёт null, когда RoadRunner попросит воркер завершиться
 while ($request = $psr7_worker->waitRequest()) {
     try {
-        $body = json_encode(['status' => 'ok'], JSON_THROW_ON_ERROR);
 
+    
+        $body = json_encode(['status' => 'хуй'], JSON_THROW_ON_ERROR);
         $response = $psr_factory->createResponse(200)
             ->withHeader('Content-Type', 'application/json')
             ->withBody($psr_factory->createStream($body));
